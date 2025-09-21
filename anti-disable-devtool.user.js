@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         DisableDevtool万能拦截器 - 增强版
 // @namespace    http://tampermonkey.net/
-// @version      3.0
-// @description  全方位拦截disable-devtool，支持多种加载方式
+// @version      3.1
+// @description  全方位拦截disable-devtool，支持多种加载方式，可拖拽悬浮控制面板
 // @author       MissChina
 // @match        *://*/*
 // @run-at       document-start
 // @grant        none
+// @icon         https://github.com/MissChina/anti-disable-devtool/raw/main/icon.png
 // ==/UserScript==
 
 (function() {
@@ -44,6 +45,18 @@
     let interceptCount = 0;
     let statusDiv = null;
     let isExpanded = false;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let panelStartX = 0;
+    let panelStartY = 0;
+    let isMinimized = false;
+    
+    // 初始化启动信息
+    console.log('%c🛡️ DisableDevtool万能拦截器 - 增强版 v3.1', 'color: #10B981; font-weight: bold; font-size: 14px;');
+    console.log('%c👨‍💻 作者: MissChina (GitHub)', 'color: #6B7280; font-size: 12px;');
+    console.log('%c🔗 项目地址: https://github.com/MissChina/anti-disable-devtool', 'color: #6B7280; font-size: 12px;');
+    console.log('%c⚠️  仅供个人非盈利使用，禁止商用', 'color: #F59E0B; font-size: 12px;');
     
     // 检查是否为目标脚本
     function isTargetScript(url, content = '') {
@@ -70,7 +83,7 @@
         return false;
     }
     
-    // 创建状态面板
+    // 创建可拖拽的状态面板
     function createStatusPanel() {
         if (!document.body) {
             setTimeout(createStatusPanel, 100);
@@ -91,34 +104,228 @@
             z-index: 999999;
             box-shadow: 0 4px 20px rgba(0,0,0,0.25);
             border: 1px solid rgba(255,255,255,0.2);
-            cursor: pointer;
+            cursor: move;
             transition: all 0.3s ease;
             min-width: 120px;
             text-align: center;
+            user-select: none;
+            backdrop-filter: blur(10px);
         `;
+        
+        // 添加作者信息水印
+        const authorInfo = document.createElement('div');
+        authorInfo.style.cssText = `
+            position: absolute;
+            bottom: -20px;
+            right: 0;
+            font-size: 8px;
+            color: rgba(255,255,255,0.6);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        authorInfo.textContent = 'by MissChina';
+        statusDiv.appendChild(authorInfo);
         
         updateStatusPanel();
         document.body.appendChild(statusDiv);
         
-        statusDiv.addEventListener('click', togglePanel);
+        // 创建控制按钮容器
+        const controlButtons = document.createElement('div');
+        controlButtons.style.cssText = `
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            display: none;
+            gap: 4px;
+        `;
         
-        // 悬停效果
+        // 最小化按钮
+        const minimizeBtn = document.createElement('div');
+        minimizeBtn.innerHTML = '−';
+        minimizeBtn.style.cssText = `
+            width: 16px;
+            height: 16px;
+            background: rgba(255, 193, 7, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        `;
+        minimizeBtn.onclick = (e) => {
+            e.stopPropagation();
+            toggleMinimize();
+        };
+        
+        // 关闭按钮
+        const closeBtn = document.createElement('div');
+        closeBtn.innerHTML = '×';
+        closeBtn.style.cssText = `
+            width: 16px;
+            height: 16px;
+            background: rgba(220, 38, 38, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        `;
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            hidePanel();
+        };
+        
+        controlButtons.appendChild(minimizeBtn);
+        controlButtons.appendChild(closeBtn);
+        statusDiv.appendChild(controlButtons);
+        
+        // 鼠标事件处理
+        statusDiv.addEventListener('mousedown', startDrag);
+        statusDiv.addEventListener('click', handleClick);
+        statusDiv.addEventListener('mouseenter', showControls);
+        statusDiv.addEventListener('mouseleave', hideControls);
+        
+        // 全局事件监听
+        document.addEventListener('mousemove', handleDrag);
+        document.addEventListener('mouseup', endDrag);
+        
+        // 悬停效果显示作者信息
         statusDiv.addEventListener('mouseenter', () => {
-            statusDiv.style.background = 'rgba(16, 185, 129, 1)';
-            statusDiv.style.transform = 'scale(1.05)';
+            if (!isDragging) {
+                statusDiv.style.background = 'rgba(16, 185, 129, 1)';
+                statusDiv.style.transform = 'scale(1.05)';
+                authorInfo.style.opacity = '1';
+            }
         });
         
         statusDiv.addEventListener('mouseleave', () => {
-            statusDiv.style.background = 'rgba(16, 185, 129, 0.9)';
-            statusDiv.style.transform = 'scale(1)';
+            if (!isDragging) {
+                statusDiv.style.background = 'rgba(16, 185, 129, 0.9)';
+                statusDiv.style.transform = 'scale(1)';
+                authorInfo.style.opacity = '0';
+            }
         });
         
-        // 3秒后半透明
+        // 5秒后自动半透明，减少干扰
         setTimeout(() => {
-            if (statusDiv && !isExpanded) {
-                statusDiv.style.opacity = '0.7';
+            if (statusDiv && !isExpanded && !isMinimized) {
+                statusDiv.style.opacity = '0.6';
             }
-        }, 3000);
+        }, 5000);
+        
+        function startDrag(e) {
+            if (e.target === minimizeBtn || e.target === closeBtn) return;
+            
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            
+            const rect = statusDiv.getBoundingClientRect();
+            panelStartX = rect.left;
+            panelStartY = rect.top;
+            
+            statusDiv.style.cursor = 'grabbing';
+            statusDiv.style.transition = 'none';
+            e.preventDefault();
+        }
+        
+        function handleDrag(e) {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - dragStartX;
+            const deltaY = e.clientY - dragStartY;
+            
+            let newX = panelStartX + deltaX;
+            let newY = panelStartY + deltaY;
+            
+            // 边界检测
+            const maxX = window.innerWidth - statusDiv.offsetWidth;
+            const maxY = window.innerHeight - statusDiv.offsetHeight;
+            
+            newX = Math.max(0, Math.min(newX, maxX));
+            newY = Math.max(0, Math.min(newY, maxY));
+            
+            statusDiv.style.left = newX + 'px';
+            statusDiv.style.top = newY + 'px';
+            statusDiv.style.right = 'auto';
+            statusDiv.style.bottom = 'auto';
+        }
+        
+        function endDrag() {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            statusDiv.style.cursor = 'move';
+            statusDiv.style.transition = 'all 0.3s ease';
+        }
+        
+        function handleClick(e) {
+            if (e.target === minimizeBtn || e.target === closeBtn) return;
+            if (isDragging) return;
+            
+            // 延迟执行，避免与拖拽冲突
+            setTimeout(() => {
+                if (!isDragging) {
+                    togglePanel();
+                }
+            }, 100);
+        }
+        
+        function showControls() {
+            if (!isMinimized) {
+                controlButtons.style.display = 'flex';
+            }
+        }
+        
+        function hideControls() {
+            controlButtons.style.display = 'none';
+        }
+        
+        function toggleMinimize() {
+            isMinimized = !isMinimized;
+            if (isMinimized) {
+                statusDiv.innerHTML = '<div style="padding: 2px 6px;">🛡️</div>';
+                statusDiv.style.minWidth = 'auto';
+                statusDiv.style.width = '24px';
+                statusDiv.style.height = '24px';
+                statusDiv.style.borderRadius = '50%';
+                controlButtons.style.display = 'none';
+                // 重新添加控制按钮到最小化状态
+                statusDiv.appendChild(controlButtons);
+            } else {
+                updateStatusPanel();
+                statusDiv.style.width = 'auto';
+                statusDiv.style.height = 'auto';
+                statusDiv.style.borderRadius = '20px';
+                statusDiv.appendChild(controlButtons);
+            }
+        }
+        
+        function hidePanel() {
+            statusDiv.style.opacity = '0';
+            statusDiv.style.transform = 'scale(0.5)';
+            setTimeout(() => {
+                if (statusDiv) {
+                    statusDiv.style.display = 'none';
+                }
+            }, 300);
+            
+            // 10秒后重新显示
+            setTimeout(() => {
+                if (statusDiv) {
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.opacity = '0.6';
+                    statusDiv.style.transform = 'scale(1)';
+                }
+            }, 10000);
+        }
     }
     
     // 切换面板状态
@@ -130,14 +337,24 @@
     
     // 更新状态显示
     function updateStatusPanel() {
-        if (!statusDiv) return;
+        if (!statusDiv || isMinimized) return;
         
         if (!isExpanded) {
             const status = interceptCount > 0 ? '🛡️' : '👁️';
             const text = interceptCount > 0 ? `已拦截 ${interceptCount}` : '守护中';
             
-            statusDiv.innerHTML = `<span>${status} ${text}</span>`;
+            statusDiv.innerHTML = `
+                <span>${status} ${text}</span>
+                <div style="position: absolute; bottom: -20px; right: 0; font-size: 8px; color: rgba(255,255,255,0.6); pointer-events: none; opacity: 0; transition: opacity 0.3s ease;">by MissChina</div>
+            `;
             statusDiv.style.padding = '6px 10px';
+            
+            // 重新添加控制按钮
+            const existingControls = statusDiv.querySelector('[data-control-buttons]');
+            if (!existingControls) {
+                const controlButtons = createControlButtons();
+                statusDiv.appendChild(controlButtons);
+            }
             return;
         }
         
@@ -157,10 +374,117 @@
             ${devToolsStatus}<br>
             ${interceptStatus}
             <div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.8);">
-                点击收缩 • 全网站通用
+                点击收缩 • 拖拽移动 • by MissChina
             </div>
+            <div style="position: absolute; bottom: -20px; right: 0; font-size: 8px; color: rgba(255,255,255,0.6); pointer-events: none; opacity: 0; transition: opacity 0.3s ease;">by MissChina</div>
         `;
         statusDiv.style.padding = '10px 14px';
+        
+        // 重新添加控制按钮
+        const controlButtons = createControlButtons();
+        statusDiv.appendChild(controlButtons);
+    }
+    
+    // 创建控制按钮
+    function createControlButtons() {
+        const controlButtons = document.createElement('div');
+        controlButtons.setAttribute('data-control-buttons', 'true');
+        controlButtons.style.cssText = `
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            display: none;
+            gap: 4px;
+        `;
+        
+        // 最小化按钮
+        const minimizeBtn = document.createElement('div');
+        minimizeBtn.innerHTML = '−';
+        minimizeBtn.style.cssText = `
+            width: 16px;
+            height: 16px;
+            background: rgba(255, 193, 7, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        `;
+        minimizeBtn.onclick = (e) => {
+            e.stopPropagation();
+            toggleMinimize();
+        };
+        
+        // 关闭按钮
+        const closeBtn = document.createElement('div');
+        closeBtn.innerHTML = '×';
+        closeBtn.style.cssText = `
+            width: 16px;
+            height: 16px;
+            background: rgba(220, 38, 38, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        `;
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            hidePanel();
+        };
+        
+        controlButtons.appendChild(minimizeBtn);
+        controlButtons.appendChild(closeBtn);
+        
+        return controlButtons;
+    }
+    
+    // 最小化切换
+    function toggleMinimize() {
+        isMinimized = !isMinimized;
+        if (isMinimized) {
+            statusDiv.innerHTML = '<div style="padding: 2px 6px; cursor: pointer;">🛡️</div>';
+            statusDiv.style.minWidth = 'auto';
+            statusDiv.style.width = '24px';
+            statusDiv.style.height = '24px';
+            statusDiv.style.borderRadius = '50%';
+            statusDiv.style.opacity = '0.8';
+        } else {
+            statusDiv.style.minWidth = '120px';
+            statusDiv.style.width = 'auto';
+            statusDiv.style.height = 'auto';
+            statusDiv.style.borderRadius = '20px';
+            statusDiv.style.opacity = '1';
+            updateStatusPanel();
+        }
+    }
+    
+    // 隐藏面板
+    function hidePanel() {
+        statusDiv.style.opacity = '0';
+        statusDiv.style.transform = 'scale(0.5)';
+        setTimeout(() => {
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+            }
+        }, 300);
+        
+        // 10秒后重新显示为最小化状态
+        setTimeout(() => {
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.style.opacity = '0.6';
+                statusDiv.style.transform = 'scale(1)';
+                isMinimized = true;
+                toggleMinimize(); // 设为最小化状态
+            }
+        }, 10000);
     }
     
     // 测试开发者工具

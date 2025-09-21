@@ -1,17 +1,50 @@
-MIT License
+个人非营利使用许可证 (Personal Non-Commercial License)
+
+版权所有 (c) 2024 MissChina
+
+特此向任何获得本软件及其相关文档文件（"软件"）副本的人员免费授予许可，在遵守以下条件的前提下，可以无限制地处理本软件，包括但不限于使用、复制、修改、合并的权利：
+
+使用限制：
+1. 本软件仅供个人非营利目的使用
+2. 禁止将本软件用于任何商业用途
+3. 禁止销售、出租或以其他方式从本软件中获取经济利益
+4. 禁止未经授权的盗用或抄袭
+
+二次开发要求：
+1. 在所有软件副本或重要部分中必须包含上述版权声明和本许可声明
+2. 二次开发或开源项目必须保留原作者信息 (MissChina)
+3. 必须在显著位置标明原始出处：https://github.com/MissChina/anti-disable-devtool
+4. 衍生作品必须同样采用本许可证
+
+免责声明：
+本软件按"原样"提供，不提供任何形式的明示或暗示保证，包括但不限于对适销性、特定用途适用性和非侵权性的保证。在任何情况下，作者或版权持有人均不对任何索赔、损害或其他责任负责，无论这些追责来自合同、侵权或其它行为中，还是产生于、源于或有关于本软件以及本软件的使用或其它处置。
+
+使用本软件即表示您同意遵守上述所有条款和条件。如果您不同意这些条款，请不要使用本软件。
+
+---
+
+Personal Non-Commercial License
 
 Copyright (c) 2024 MissChina
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+to use, copy, modify, merge, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Usage Restrictions:
+1. This software is for personal non-commercial use only
+2. Commercial use is strictly prohibited  
+3. Selling, renting, or otherwise profiting from this software is forbidden
+4. Unauthorized plagiarism or copying is prohibited
 
+Development Requirements:
+1. The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software
+2. Derivative works or open source projects must retain original author information (MissChina)
+3. Original source must be clearly attributed: https://github.com/MissChina/anti-disable-devtool
+4. Derivative works must use the same license
+
+Disclaimer:
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -19,3 +52,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+By using this software, you agree to comply with all the above terms and conditions.
+If you do not agree to these terms, please do not use this software.
