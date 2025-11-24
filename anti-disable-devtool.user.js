@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         DisableDevtool万能拦截器 - 增强版
+// @name         禁用开发者工具万能拦截器 - 极简版
 // @namespace    http://tampermonkey.net/
-// @version      3.1
-// @description  全方位拦截disable-devtool，支持多种加载方式，可拖拽悬浮控制面板
+// @version      7.1
+// @description  全方位拦截禁用开发者工具的脚本，保护控制台正常使用
 // @author       MissChina
 // @match        *://*/*
 // @run-at       document-start
@@ -12,620 +12,272 @@
 
 (function() {
     'use strict';
-    
-    // 扩展的检测关键字（根据源码分析得出的特征）
-    const TARGET_PATTERNS = [
-        // 文件名模式
+
+    // ==================== 检测规则 ====================
+    const 检测关键词 = [
         'disable-devtool',
         'anti-debug',
         'devtool-disable',
         'security',
         'protect',
-        
-        // 域名模式（常见CDN）
         'cdn.jsdelivr.net',
         'unpkg.com',
         'cdnjs.cloudflare.com',
-        
-        // 你遇到的具体案例
         'vf.uujjyp.cn',
         'frameworks'
     ];
-    
-    // 代码特征检测（检测内联脚本）
-    const CODE_SIGNATURES = [
-        'DisableDevtool',           // 核心对象名
-        'ondevtoolopen',           // 特征方法名
-        'detectors',               // 配置属性
-        'RegToString',             // 检测器类型
-        'FuncToString',            // 检测器类型
-        'clearIntervalWhenDevOpenTrigger', // 特有配置项
+
+    const 代码特征 = [
+        'DisableDevtool',
+        'ondevtoolopen',
+        'detectors',
+        'RegToString',
+        'FuncToString',
+        'clearIntervalWhenDevOpenTrigger',
     ];
-    
-    let interceptCount = 0;
-    let statusDiv = null;
-    let isExpanded = false;
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let panelStartX = 0;
-    let panelStartY = 0;
-    let isMinimized = false;
-    
-    // 初始化启动信息
-    console.log('%c🛡️ DisableDevtool万能拦截器 - 增强版 v3.1', 'color: #10B981; font-weight: bold; font-size: 14px;');
-    console.log('%c👨‍💻 作者: MissChina (GitHub)', 'color: #6B7280; font-size: 12px;');
-    console.log('%c🔗 项目地址: https://github.com/MissChina/anti-disable-devtool', 'color: #6B7280; font-size: 12px;');
-    console.log('%c⚠️  仅供个人非盈利使用，禁止商用', 'color: #F59E0B; font-size: 12px;');
-    
-    // 检查是否为目标脚本
-    function isTargetScript(url, content = '') {
-        if (!url && !content) return false;
-        
-        // 检查URL
-        if (url) {
-            const urlLower = url.toLowerCase();
-            if (TARGET_PATTERNS.some(pattern => urlLower.includes(pattern.toLowerCase()))) {
+
+    let 拦截次数 = 0;
+    let 待显示提示队列 = [];
+    let 样式已注入 = false;
+
+    // ==================== 启动信息 ====================
+    console.log('%c🛡️ 禁用开发者工具万能拦截器 v7.1', 'color: #10B981; font-weight: bold; font-size: 14px;');
+    console.log('%c👨‍💻 作者：MissChina', 'color: #6B7280; font-size: 12px;');
+    console.log('%c⚠️ 仅供个人非盈利使用，禁止商用', 'color: #F59E0B; font-size: 12px; font-weight: bold;');
+
+    // ==================== 注入样式 ====================
+    function 注入样式() {
+        if (样式已注入) return;
+
+        const 样式标签 = document.createElement('style');
+        样式标签.textContent = `
+            @keyframes antiDevtoolSlideIn {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes antiDevtoolFadeOut {
+                to {
+                    opacity: 0;
+                    transform: translateX(400px);
+                }
+            }
+        `;
+        document.head.appendChild(样式标签);
+        样式已注入 = true;
+    }
+
+    // ==================== 提示系统 ====================
+    function 显示提示(消息, 网址 = '') {
+        // 如果 body 还不存在，加入队列等待
+        if (!document.body) {
+            待显示提示队列.push({ 消息, 网址 });
+            return;
+        }
+
+        // 确保样式已注入
+        注入样式();
+
+        const 提示框 = document.createElement('div');
+        提示框.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.95) 0%, rgba(5, 150, 105, 0.95) 100%);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+            font-size: 14px;
+            z-index: 2147483647;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(20px);
+            animation: antiDevtoolSlideIn 0.3s ease-out;
+            max-width: 400px;
+            word-break: break-all;
+        `;
+
+        提示框.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 24px;">🛡️</span>
+                <div>
+                    <div style="font-weight: 600; margin-bottom: 4px;">${消息}</div>
+                    ${网址 ? `<div style="font-size: 12px; opacity: 0.9; margin-top: 4px; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">${网址}</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(提示框);
+
+        // 3秒后淡出并移除
+        setTimeout(() => {
+            提示框.style.animation = 'antiDevtoolFadeOut 0.3s ease-out forwards';
+            setTimeout(() => {
+                if (提示框.parentNode) {
+                    提示框.parentNode.removeChild(提示框);
+                }
+            }, 300);
+        }, 3000);
+    }
+
+    // ==================== 处理待显示的提示 ====================
+    function 处理待显示提示() {
+        if (待显示提示队列.length === 0) return;
+
+        待显示提示队列.forEach(项 => {
+            显示提示(项.消息, 项.网址);
+        });
+
+        待显示提示队列 = [];
+    }
+
+    // ==================== 检测函数 ====================
+    function 是否为目标脚本(网址, 内容 = '') {
+        if (!网址 && !内容) return false;
+
+        if (网址) {
+            const 小写网址 = 网址.toLowerCase();
+            if (检测关键词.some(关键词 => 小写网址.includes(关键词.toLowerCase()))) {
                 return true;
             }
         }
-        
-        // 检查代码内容特征
-        if (content) {
-            const codeSignatureCount = CODE_SIGNATURES.filter(sig => 
-                content.includes(sig)
-            ).length;
-            
-            // 如果包含3个或以上特征，判定为目标脚本
-            return codeSignatureCount >= 3;
+
+        if (内容) {
+            const 匹配数量 = 代码特征.filter(特征 => 内容.includes(特征)).length;
+            return 匹配数量 >= 3;
         }
-        
+
         return false;
     }
-    
-    // 创建可拖拽的状态面板
-    function createStatusPanel() {
-        if (!document.body) {
-            setTimeout(createStatusPanel, 100);
-            return;
-        }
-        
-        statusDiv = document.createElement('div');
-        statusDiv.style.cssText = `
-            position: fixed;
-            top: 15px;
-            right: 15px;
-            background: rgba(16, 185, 129, 0.9);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 12px;
-            z-index: 999999;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-            border: 1px solid rgba(255,255,255,0.2);
-            cursor: move;
-            transition: all 0.3s ease;
-            min-width: 120px;
-            text-align: center;
-            user-select: none;
-            backdrop-filter: blur(10px);
-        `;
-        
-        // 添加作者信息水印
-        const authorInfo = document.createElement('div');
-        authorInfo.style.cssText = `
-            position: absolute;
-            bottom: -20px;
-            right: 0;
-            font-size: 8px;
-            color: rgba(255,255,255,0.6);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        `;
-        authorInfo.textContent = 'by MissChina';
-        statusDiv.appendChild(authorInfo);
-        
-        updateStatusPanel();
-        document.body.appendChild(statusDiv);
-        
-        // 创建控制按钮容器
-        const controlButtons = document.createElement('div');
-        controlButtons.style.cssText = `
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            display: none;
-            gap: 4px;
-        `;
-        
-        // 最小化按钮
-        const minimizeBtn = document.createElement('div');
-        minimizeBtn.innerHTML = '−';
-        minimizeBtn.style.cssText = `
-            width: 16px;
-            height: 16px;
-            background: rgba(255, 193, 7, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 10px;
-            font-weight: bold;
-            color: white;
-        `;
-        minimizeBtn.onclick = (e) => {
-            e.stopPropagation();
-            toggleMinimize();
-        };
-        
-        // 关闭按钮
-        const closeBtn = document.createElement('div');
-        closeBtn.innerHTML = '×';
-        closeBtn.style.cssText = `
-            width: 16px;
-            height: 16px;
-            background: rgba(220, 38, 38, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-            color: white;
-        `;
-        closeBtn.onclick = (e) => {
-            e.stopPropagation();
-            hidePanel();
-        };
-        
-        controlButtons.appendChild(minimizeBtn);
-        controlButtons.appendChild(closeBtn);
-        statusDiv.appendChild(controlButtons);
-        
-        // 鼠标事件处理
-        statusDiv.addEventListener('mousedown', startDrag);
-        statusDiv.addEventListener('click', handleClick);
-        statusDiv.addEventListener('mouseenter', showControls);
-        statusDiv.addEventListener('mouseleave', hideControls);
-        
-        // 全局事件监听
-        document.addEventListener('mousemove', handleDrag);
-        document.addEventListener('mouseup', endDrag);
-        
-        // 悬停效果显示作者信息
-        statusDiv.addEventListener('mouseenter', () => {
-            if (!isDragging) {
-                statusDiv.style.background = 'rgba(16, 185, 129, 1)';
-                statusDiv.style.transform = 'scale(1.05)';
-                authorInfo.style.opacity = '1';
-            }
-        });
-        
-        statusDiv.addEventListener('mouseleave', () => {
-            if (!isDragging) {
-                statusDiv.style.background = 'rgba(16, 185, 129, 0.9)';
-                statusDiv.style.transform = 'scale(1)';
-                authorInfo.style.opacity = '0';
-            }
-        });
-        
-        // 5秒后自动半透明，减少干扰
-        setTimeout(() => {
-            if (statusDiv && !isExpanded && !isMinimized) {
-                statusDiv.style.opacity = '0.6';
-            }
-        }, 5000);
-        
-        function startDrag(e) {
-            if (e.target === minimizeBtn || e.target === closeBtn) return;
-            
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragStartY = e.clientY;
-            
-            const rect = statusDiv.getBoundingClientRect();
-            panelStartX = rect.left;
-            panelStartY = rect.top;
-            
-            statusDiv.style.cursor = 'grabbing';
-            statusDiv.style.transition = 'none';
-            e.preventDefault();
-        }
-        
-        function handleDrag(e) {
-            if (!isDragging) return;
-            
-            const deltaX = e.clientX - dragStartX;
-            const deltaY = e.clientY - dragStartY;
-            
-            let newX = panelStartX + deltaX;
-            let newY = panelStartY + deltaY;
-            
-            // 边界检测
-            const maxX = window.innerWidth - statusDiv.offsetWidth;
-            const maxY = window.innerHeight - statusDiv.offsetHeight;
-            
-            newX = Math.max(0, Math.min(newX, maxX));
-            newY = Math.max(0, Math.min(newY, maxY));
-            
-            statusDiv.style.left = newX + 'px';
-            statusDiv.style.top = newY + 'px';
-            statusDiv.style.right = 'auto';
-            statusDiv.style.bottom = 'auto';
-        }
-        
-        function endDrag() {
-            if (!isDragging) return;
-            
-            isDragging = false;
-            statusDiv.style.cursor = 'move';
-            statusDiv.style.transition = 'all 0.3s ease';
-        }
-        
-        function handleClick(e) {
-            if (e.target === minimizeBtn || e.target === closeBtn) return;
-            if (isDragging) return;
-            
-            // 延迟执行，避免与拖拽冲突
-            setTimeout(() => {
-                if (!isDragging) {
-                    togglePanel();
-                }
-            }, 100);
-        }
-        
-        function showControls() {
-            if (!isMinimized) {
-                controlButtons.style.display = 'flex';
-            }
-        }
-        
-        function hideControls() {
-            controlButtons.style.display = 'none';
-        }
-        
-        function toggleMinimize() {
-            isMinimized = !isMinimized;
-            if (isMinimized) {
-                statusDiv.innerHTML = '<div style="padding: 2px 6px;">🛡️</div>';
-                statusDiv.style.minWidth = 'auto';
-                statusDiv.style.width = '24px';
-                statusDiv.style.height = '24px';
-                statusDiv.style.borderRadius = '50%';
-                controlButtons.style.display = 'none';
-                // 重新添加控制按钮到最小化状态
-                statusDiv.appendChild(controlButtons);
-            } else {
-                updateStatusPanel();
-                statusDiv.style.width = 'auto';
-                statusDiv.style.height = 'auto';
-                statusDiv.style.borderRadius = '20px';
-                statusDiv.appendChild(controlButtons);
-            }
-        }
-        
-        function hidePanel() {
-            statusDiv.style.opacity = '0';
-            statusDiv.style.transform = 'scale(0.5)';
-            setTimeout(() => {
-                if (statusDiv) {
-                    statusDiv.style.display = 'none';
-                }
-            }, 300);
-            
-            // 10秒后重新显示
-            setTimeout(() => {
-                if (statusDiv) {
-                    statusDiv.style.display = 'block';
-                    statusDiv.style.opacity = '0.6';
-                    statusDiv.style.transform = 'scale(1)';
-                }
-            }, 10000);
-        }
-    }
-    
-    // 切换面板状态
-    function togglePanel() {
-        isExpanded = !isExpanded;
-        statusDiv.style.opacity = '1';
-        updateStatusPanel();
-    }
-    
-    // 更新状态显示
-    function updateStatusPanel() {
-        if (!statusDiv || isMinimized) return;
-        
-        if (!isExpanded) {
-            const status = interceptCount > 0 ? '🛡️' : '👁️';
-            const text = interceptCount > 0 ? `已拦截 ${interceptCount}` : '守护中';
-            
-            statusDiv.innerHTML = `
-                <span>${status} ${text}</span>
-                <div style="position: absolute; bottom: -20px; right: 0; font-size: 8px; color: rgba(255,255,255,0.6); pointer-events: none; opacity: 0; transition: opacity 0.3s ease;">by MissChina</div>
+
+    // ==================== 拦截引擎 ====================
+    function 拦截脚本(脚本元素, 方法) {
+        const 网址 = 脚本元素.src || 脚本元素.getAttribute('src') || '';
+        const 内容 = 脚本元素.textContent || 脚本元素.innerHTML || '';
+
+        if (是否为目标脚本(网址, 内容)) {
+            拦截次数++;
+            const 显示网址 = 网址 || '内联脚本';
+
+            console.log(`🛡️ 拦截成功 [${方法}]`, 显示网址);
+            显示提示(`成功拦截第 ${拦截次数} 个恶意脚本`, 显示网址);
+
+            const 替代脚本 = document.createElement('script');
+            替代脚本.textContent = `
+                console.log('%c🛡️ 反调试脚本已被安全拦截', 'color: #10b981; font-weight: bold;');
+                window.DisableDevtool = function() { return { success: false, reason: 'intercepted' }; };
             `;
-            statusDiv.style.padding = '6px 10px';
-            
-            // 重新添加控制按钮
-            const existingControls = statusDiv.querySelector('[data-control-buttons]');
-            if (!existingControls) {
-                const controlButtons = createControlButtons();
-                statusDiv.appendChild(controlButtons);
-            }
-            return;
-        }
-        
-        // 详细模式
-        const devToolsStatus = testDevTools() ? 
-            '<span style="color: #86efac;">✅ 控制台可用</span>' : 
-            '<span style="color: #fca5a5;">❌ 控制台被禁</span>';
-        
-        const interceptStatus = interceptCount > 0 ? 
-            `<span style="color: #86efac;">🛡️ 成功拦截 ${interceptCount}</span>` : 
-            '<span style="color: #fde68a;">👁️ 持续守护</span>';
-        
-        statusDiv.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 4px;">
-                🔒 万能拦截器
-            </div>
-            ${devToolsStatus}<br>
-            ${interceptStatus}
-            <div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.8);">
-                点击收缩 • 拖拽移动 • by MissChina
-            </div>
-            <div style="position: absolute; bottom: -20px; right: 0; font-size: 8px; color: rgba(255,255,255,0.6); pointer-events: none; opacity: 0; transition: opacity 0.3s ease;">by MissChina</div>
-        `;
-        statusDiv.style.padding = '10px 14px';
-        
-        // 重新添加控制按钮
-        const controlButtons = createControlButtons();
-        statusDiv.appendChild(controlButtons);
-    }
-    
-    // 创建控制按钮
-    function createControlButtons() {
-        const controlButtons = document.createElement('div');
-        controlButtons.setAttribute('data-control-buttons', 'true');
-        controlButtons.style.cssText = `
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            display: none;
-            gap: 4px;
-        `;
-        
-        // 最小化按钮
-        const minimizeBtn = document.createElement('div');
-        minimizeBtn.innerHTML = '−';
-        minimizeBtn.style.cssText = `
-            width: 16px;
-            height: 16px;
-            background: rgba(255, 193, 7, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 10px;
-            font-weight: bold;
-            color: white;
-        `;
-        minimizeBtn.onclick = (e) => {
-            e.stopPropagation();
-            toggleMinimize();
-        };
-        
-        // 关闭按钮
-        const closeBtn = document.createElement('div');
-        closeBtn.innerHTML = '×';
-        closeBtn.style.cssText = `
-            width: 16px;
-            height: 16px;
-            background: rgba(220, 38, 38, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-            color: white;
-        `;
-        closeBtn.onclick = (e) => {
-            e.stopPropagation();
-            hidePanel();
-        };
-        
-        controlButtons.appendChild(minimizeBtn);
-        controlButtons.appendChild(closeBtn);
-        
-        return controlButtons;
-    }
-    
-    // 最小化切换
-    function toggleMinimize() {
-        isMinimized = !isMinimized;
-        if (isMinimized) {
-            statusDiv.innerHTML = '<div style="padding: 2px 6px; cursor: pointer;">🛡️</div>';
-            statusDiv.style.minWidth = 'auto';
-            statusDiv.style.width = '24px';
-            statusDiv.style.height = '24px';
-            statusDiv.style.borderRadius = '50%';
-            statusDiv.style.opacity = '0.8';
-        } else {
-            statusDiv.style.minWidth = '120px';
-            statusDiv.style.width = 'auto';
-            statusDiv.style.height = 'auto';
-            statusDiv.style.borderRadius = '20px';
-            statusDiv.style.opacity = '1';
-            updateStatusPanel();
-        }
-    }
-    
-    // 隐藏面板
-    function hidePanel() {
-        statusDiv.style.opacity = '0';
-        statusDiv.style.transform = 'scale(0.5)';
-        setTimeout(() => {
-            if (statusDiv) {
-                statusDiv.style.display = 'none';
-            }
-        }, 300);
-        
-        // 10秒后重新显示为最小化状态
-        setTimeout(() => {
-            if (statusDiv) {
-                statusDiv.style.display = 'block';
-                statusDiv.style.opacity = '0.6';
-                statusDiv.style.transform = 'scale(1)';
-                isMinimized = true;
-                toggleMinimize(); // 设为最小化状态
-            }
-        }, 10000);
-    }
-    
-    // 测试开发者工具
-    function testDevTools() {
-        try {
-            return typeof console !== 'undefined' && typeof console.log === 'function';
-        } catch(e) {
-            return false;
-        }
-    }
-    
-    // 拦截脚本核心函数
-    function interceptScript(scriptElement, method) {
-        const src = scriptElement.src || scriptElement.getAttribute('src') || '';
-        const content = scriptElement.textContent || scriptElement.innerHTML || '';
-        
-        if (isTargetScript(src, content)) {
-            interceptCount++;
-            console.log(`🛡️ [万能拦截器] ${method}方式拦截成功:`, src || '内联脚本');
-            updateStatusPanel();
-            
-            // 创建无害的替代脚本
-            const dummyScript = document.createElement('script');
-            dummyScript.textContent = `
-                // DisableDevtool 已被万能拦截器安全移除
-                console.log('🛡️ 检测到反调试脚本，已安全拦截');
-                
-                // 提供兼容性支持，防止页面报错
-                window.DisableDevtool = function() {
-                    return { success: false, reason: 'intercepted by universal blocker' };
-                };
-            `;
-            return dummyScript;
+            return 替代脚本;
         }
         return null;
     }
-    
-    // 劫持各种脚本加载方式
-    const originalAppendChild = Element.prototype.appendChild;
-    Element.prototype.appendChild = function(child) {
-        if (child && child.tagName === 'SCRIPT') {
-            const replacement = interceptScript(child, 'appendChild');
-            if (replacement) {
-                return originalAppendChild.call(this, replacement);
-            }
+
+    // ==================== 劫持脚本加载 ====================
+    const 原始appendChild = Element.prototype.appendChild;
+    Element.prototype.appendChild = function(子元素) {
+        if (子元素 && 子元素.tagName === 'SCRIPT') {
+            const 替换元素 = 拦截脚本(子元素, 'appendChild');
+            if (替换元素) return 原始appendChild.call(this, 替换元素);
         }
-        return originalAppendChild.call(this, child);
+        return 原始appendChild.call(this, 子元素);
     };
-    
-    const originalInsertBefore = Element.prototype.insertBefore;
-    Element.prototype.insertBefore = function(newNode, referenceNode) {
-        if (newNode && newNode.tagName === 'SCRIPT') {
-            const replacement = interceptScript(newNode, 'insertBefore');
-            if (replacement) {
-                return originalInsertBefore.call(this, replacement, referenceNode);
-            }
+
+    const 原始insertBefore = Element.prototype.insertBefore;
+    Element.prototype.insertBefore = function(新节点, 参考节点) {
+        if (新节点 && 新节点.tagName === 'SCRIPT') {
+            const 替换元素 = 拦截脚本(新节点, 'insertBefore');
+            if (替换元素) return 原始insertBefore.call(this, 替换元素, 参考节点);
         }
-        return originalInsertBefore.call(this, newNode, referenceNode);
+        return 原始insertBefore.call(this, 新节点, 参考节点);
     };
-    
-    const originalCreateElement = Document.prototype.createElement;
-    Document.prototype.createElement = function(tagName) {
-        const element = originalCreateElement.call(this, tagName);
-        
-        if (tagName && tagName.toLowerCase() === 'script') {
-            let realSrc = '';
-            
-            Object.defineProperty(element, 'src', {
-                get: function() { return realSrc; },
-                set: function(value) {
-                    if (value && isTargetScript(value)) {
-                        interceptCount++;
-                        console.log(`🛡️ [万能拦截器] createElement拦截:`, value);
-                        updateStatusPanel();
-                        return; // 阻止设置src
-                    }
-                    realSrc = value;
-                    element.setAttribute('src', value);
-                }
-            });
-            
-            // 劫持textContent设置（拦截内联脚本）
-            const originalTextContentSetter = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent').set;
-            Object.defineProperty(element, 'textContent', {
-                get: function() {
-                    return this._textContent || '';
-                },
-                set: function(value) {
-                    if (value && isTargetScript('', value)) {
-                        interceptCount++;
-                        console.log('🛡️ [万能拦截器] 内联脚本拦截成功');
-                        updateStatusPanel();
-                        this._textContent = '// 内联反调试脚本已被拦截';
+
+    const 原始createElement = Document.prototype.createElement;
+    Document.prototype.createElement = function(标签名) {
+        const 元素 = 原始createElement.call(this, 标签名);
+
+        if (标签名 && 标签名.toLowerCase() === 'script') {
+            let 真实网址 = '';
+
+            Object.defineProperty(元素, 'src', {
+                get: () => 真实网址,
+                set: (值) => {
+                    if (值 && 是否为目标脚本(值)) {
+                        拦截次数++;
+                        console.log(`🛡️ 拦截成功 [createElement]`, 值);
+                        显示提示(`成功拦截第 ${拦截次数} 个恶意脚本`, 值);
                         return;
                     }
-                    this._textContent = value;
-                    originalTextContentSetter.call(this, value);
+                    真实网址 = 值;
+                    元素.setAttribute('src', 值);
+                }
+            });
+
+            const 原始设置器 = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent').set;
+            Object.defineProperty(元素, 'textContent', {
+                get: function() { return this._内容 || ''; },
+                set: function(值) {
+                    if (值 && 是否为目标脚本('', 值)) {
+                        拦截次数++;
+                        console.log(`🛡️ 拦截成功 [内联脚本]`);
+                        显示提示(`成功拦截第 ${拦截次数} 个恶意脚本`, '内联脚本');
+                        this._内容 = '// 已拦截';
+                        return;
+                    }
+                    this._内容 = 值;
+                    原始设置器.call(this, 值);
                 }
             });
         }
-        
-        return element;
+
+        return 元素;
     };
-    
-    // 全局保护
+
+    // ==================== 全局保护 ====================
     Object.defineProperty(window, 'DisableDevtool', {
-        get: function() {
-            console.log('🛡️ [万能拦截器] DisableDevtool对象访问被拦截');
-            return function() {
-                return { success: false, reason: 'blocked by universal interceptor' };
-            };
-        },
-        set: function() {
-            console.log('🛡️ [万能拦截器] 禁止设置DisableDevtool');
-        }
+        get: () => function() { return { success: false, reason: 'blocked' }; },
+        set: () => {},
+        configurable: false
     });
-    
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', createStatusPanel);
-    } else {
-        setTimeout(createStatusPanel, 100);
+
+    // ==================== 等待 body 加载 ====================
+    function 初始化提示系统() {
+        if (document.body) {
+            处理待显示提示();
+        } else {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    处理待显示提示();
+                });
+            } else {
+                setTimeout(初始化提示系统, 50);
+            }
+        }
     }
-    
-    // 检查已存在脚本
+
+    初始化提示系统();
+
+    // ==================== 扫描已存在的脚本 ====================
     setTimeout(() => {
-        document.querySelectorAll('script').forEach(script => {
-            const src = script.src;
-            const content = script.textContent || script.innerHTML;
-            
-            if (isTargetScript(src, content)) {
-                console.log('🛡️ [万能拦截器] 发现并移除已存在脚本:', src || '内联脚本');
-                if (script.parentNode) {
-                    script.parentNode.removeChild(script);
-                    interceptCount++;
-                    updateStatusPanel();
+        document.querySelectorAll('script').forEach(脚本 => {
+            const 网址 = 脚本.src;
+            const 内容 = 脚本.textContent || 脚本.innerHTML;
+
+            if (是否为目标脚本(网址, 内容)) {
+                console.log('🛡️ 扫描移除已存在的脚本', 网址 || '内联脚本');
+                if (脚本.parentNode) {
+                    脚本.parentNode.removeChild(脚本);
+                    拦截次数++;
+                    显示提示(`扫描移除已存在的恶意脚本`, 网址 || '内联脚本');
                 }
             }
         });
     }, 500);
-    
-    console.log('🛡️ DisableDevtool万能拦截器已启动 - 适配全网站');
-    
+
+    console.log('🛡️ 拦截器已启动，开始保护控制台');
+
 })();
