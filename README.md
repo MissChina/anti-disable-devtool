@@ -1,154 +1,131 @@
-# DisableDevtool 万能拦截器 - 增强版
+# Anti-Disable-Devtool
 
-🛡️ **全方位拦截disable-devtool，支持多种加载方式**
+智能拦截 disable-devtool 反调试脚本，保护开发者工具正常使用。
 
-一个强大的用户脚本，可以检测并拦截各种反调试脚本，确保开发者工具始终可用。
+## 功能特性
 
-## ✨ 特性
+**智能检测**
+- URL 关键词匹配
+- 代码特征加权分析
+- 多维度综合评分
 
-- 🔍 **智能检测**: 支持多种反调试脚本检测模式
-  - 文件名模式匹配
-  - CDN域名检测
-  - 代码特征分析
-- 🛡️ **全方位拦截**: 
-  - 拦截动态加载的脚本
-  - 拦截内联脚本
-  - 拦截已存在的脚本
-- 🎮 **可拖拽面板**: 
-  - 支持鼠标拖拽移动
-  - 可最小化和隐藏
-  - 智能边界检测
-  - 减少页面干扰
-- 📊 **可视化状态**: 实时显示拦截状态和开发者工具可用性
-- 🎯 **精准匹配**: 基于代码特征的智能识别，减少误拦截
-- 🌐 **全网站兼容**: 适用于所有网站
-- 👨‍💻 **作者标识**: 显示制作者信息，GitHub: MissChina
+**全面拦截**
+- `createElement` 动态创建
+- `appendChild` / `insertBefore` DOM 插入
+- `innerHTML` / `document.write` HTML 注入
+- `Function` / `eval` 动态执行
+- `MutationObserver` DOM 变化监控
 
-## 🚀 安装方法
+**反制措施**
+- 阻止恶意跳转（百度、谷歌等）
+- 拦截反调试 alert
+- 伪造窗口尺寸
+- 锁定全局变量
+- 移除 debugger 语句
 
-### 方法一：直接安装
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 或 [Greasemonkey](https://www.greasespot.net/) 浏览器扩展
+**监控面板**
+- 实时显示捕获的脚本
+- 分类查看：全部 / 危险 / 已拦截 / 安全
+- 搜索过滤
+- 查看匹配特征、调用栈、代码预览
+- 一键打开 / 复制 URL
+
+## 安装
+
+### Tampermonkey
+
+1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
 2. 点击 [安装脚本](https://github.com/MissChina/anti-disable-devtool/raw/main/anti-disable-devtool.user.js)
-3. 在弹出的安装页面点击"安装"
+3. 确认安装
 
-### 方法二：手动安装
-1. 复制 `anti-disable-devtool.user.js` 文件内容
-2. 在 Tampermonkey 控制面板中创建新脚本
-3. 粘贴代码并保存
+### 手动安装
 
-## 🎯 检测特征
+1. 复制 `anti-disable-devtool.user.js` 内容
+2. 在 Tampermonkey 中新建脚本
+3. 粘贴并保存
 
-### 文件名模式
-- `disable-devtool`
-- `anti-debug`
-- `devtool-disable`
-- `security`
-- `protect`
+## 配置
 
-### CDN域名
-- `cdn.jsdelivr.net`
-- `unpkg.com`
-- `cdnjs.cloudflare.com`
+脚本顶部可修改配置：
 
-### 代码特征
-- `DisableDevtool` - 核心对象名
-- `ondevtoolopen` - 特征方法名
-- `detectors` - 配置属性
-- `RegToString` / `FuncToString` - 检测器类型
-- `clearIntervalWhenDevOpenTrigger` - 特有配置项
-
-## 📋 使用说明
-
-1. **安装完成后自动启动**: 脚本会在页面加载时自动运行
-2. **状态指示器**: 右上角会显示一个绿色的状态指示器
-   - 👁️ 守护中：脚本正在监控，未发现反调试脚本
-   - 🛡️ 已拦截：成功拦截了反调试脚本
-3. **详细信息**: 点击状态指示器可查看详细信息
-4. **控制台日志**: 拦截行为会在浏览器控制台中输出详细日志
-
-## 🔧 工作原理
-
-### 拦截机制
-1. **DOM操作拦截**: 劫持 `appendChild`、`insertBefore` 等方法
-2. **元素创建拦截**: 监控 `createElement` 方法
-3. **属性设置拦截**: 监控 `src` 和 `textContent` 属性设置
-4. **全局对象保护**: 阻止 `DisableDevtool` 对象的创建和访问
-
-### 检测算法
-- **URL匹配**: 检查脚本URL是否包含特征关键字
-- **内容分析**: 分析脚本内容，计算特征关键字出现次数
-- **阈值判断**: 当特征匹配数量达到阈值时判定为目标脚本
-
-## 🛠️ 技术细节
-
-### 核心功能
 ```javascript
-// 检测目标脚本
-function isTargetScript(url, content) {
-    // URL模式匹配
-    // 代码特征分析
-    // 返回检测结果
-}
-
-// 拦截脚本加载
-function interceptScript(scriptElement, method) {
-    // 创建无害的替代脚本
-    // 记录拦截日志
-    // 更新状态显示
-}
+const CONFIG = {
+    enableBlock: true,   // 启用拦截
+    showPanel: true,     // 显示面板
+    debug: false,        // 调试模式
+    threshold: 4         // 特征匹配阈值
+};
 ```
 
-### 兼容性处理
-- 提供 `DisableDevtool` 函数的兼容性实现
-- 防止页面因缺少对象而报错
-- 保持页面正常功能
+## 检测特征
 
-## 📊 支持的反调试库
+### URL 关键词
 
-- ✅ disable-devtool (官方库)
-- ✅ 各种自定义反调试脚本
-- ✅ 基于 F12 检测的脚本
-- ✅ 控制台禁用脚本
-- ✅ 右键菜单禁用脚本
+```
+disable-devtool, disable_devtool, disabledevtool
+anti-debug, anti_debug, devtools-detect
+```
 
-## 🤝 贡献
+### 代码特征（带权重）
 
-欢迎提交 Issue 和 Pull Request 来改进这个项目！
+| 特征 | 权重 |
+|------|------|
+| theajack.github.io | 5 |
+| clearIntervalWhenDevOpenTrigger | 5 |
+| DisableDevtool | 3 |
+| ondevtoolopen | 3 |
+| Function debugger | 3 |
+| RegToString/FuncToString | 3 |
+| 跳转检测 | 3 |
+| ondevtoolclose | 2 |
+| isDevToolOpened | 2 |
+| 尺寸检测 | 2 |
+| F12检测 | 2 |
+| eruda/vconsole | 1 |
+| 右键禁用 | 1 |
 
-### 如何贡献
-1. Fork 这个项目
-2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交你的修改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启一个 Pull Request
+当总分 >= 4 时判定为危险脚本。
 
-## 📝 许可证
+## API
 
-本项目采用 **个人非营利使用许可证** - 查看 [LICENSE](LICENSE) 文件了解详情
+脚本暴露全局对象 `window._AntiDD`：
 
-### ⚠️ 重要提醒
-- ✅ 个人非营利使用：学习、研究、个人项目
-- ❌ 禁止商业用途：不得用于盈利性项目或商业产品
-- ❌ 禁止盗用抄袭：必须保留原作者信息和项目出处
-- 🔄 二次开发：欢迎，但需保留原作者信息并使用相同许可证
+```javascript
+_AntiDD.version     // 版本号
+_AntiDD.config      // 配置对象
+_AntiDD.data        // 数据（scripts, blocked）
+_AntiDD.scan()      // 手动扫描
+_AntiDD.analyze(code, url)  // 分析脚本
+```
 
-### 📄 许可证要求
-如果您要基于本项目进行二次开发或开源：
-1. 必须在显著位置保留原作者信息：**MissChina**
-2. 必须标明原始项目地址：`https://github.com/MissChina/anti-disable-devtool`
-3. 衍生作品必须采用相同的许可证
-4. 不得用于任何商业目的
+## 文件结构
 
-## ⚠️ 免责声明
+```
+anti-disable-devtool/
+├── anti-disable-devtool.user.js  # 主脚本
+├── debug-console.user.js         # 调试面板（独立版）
+├── README.md                     # 说明文档
+├── LICENSE                       # 许可证
+└── icon.png                      # 图标
+```
 
-本工具仅供学习和研究使用，请遵守相关法律法规和网站使用条款。使用者需对使用本工具的行为承担责任。
+## 许可证
 
-## 🔗 相关链接
+个人非营利使用许可证
 
-- [Tampermonkey 官网](https://www.tampermonkey.net/)
-- [Greasemonkey 官网](https://www.greasespot.net/)
-- [用户脚本开发文档](https://wiki.greasespot.net/User_Script_Hosting)
+- 允许：学习、研究、个人项目
+- 禁止：商业用途、盗用抄袭
+- 二次开发需保留原作者信息
 
----
+详见 [LICENSE](LICENSE)
 
-**如果这个项目对你有帮助，请给一个 ⭐️ Star！**
+## 作者
+
+**MissChina**
+
+- GitHub: [MissChina](https://github.com/MissChina)
+- 项目地址: [anti-disable-devtool](https://github.com/MissChina/anti-disable-devtool)
+
+## 免责声明
+
+本工具仅供学习研究使用。使用者需遵守相关法律法规，对使用行为自行承担责任。
