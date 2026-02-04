@@ -5,7 +5,16 @@
 // @description  监控页面加载的所有 JS 脚本（纯监控，不拦截）
 // @author       MissChina
 // @license      Personal Non-Commercial License
-// @match        *://*/*
+// @match        *://*.hhkan0.com/*
+// @match        *://*.hhkan1.com/*
+// @match        *://*.hhkan2.com/*
+// @match        *://*.hhkan3.com/*
+// @match        *://*.hhkan4.com/*
+// @match        *://hhkan0.com/*
+// @match        *://hhkan1.com/*
+// @match        *://hhkan2.com/*
+// @match        *://hhkan3.com/*
+// @match        *://hhkan4.com/*
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==

@@ -5,7 +5,16 @@
 // @description  智能拦截 disable-devtool 反调试脚本，保护开发者工具正常使用
 // @author       MissChina
 // @license      Personal Non-Commercial License
-// @match        *://*/*
+// @match        *://*.hhkan0.com/*
+// @match        *://*.hhkan1.com/*
+// @match        *://*.hhkan2.com/*
+// @match        *://*.hhkan3.com/*
+// @match        *://*.hhkan4.com/*
+// @match        *://hhkan0.com/*
+// @match        *://hhkan1.com/*
+// @match        *://hhkan2.com/*
+// @match        *://hhkan3.com/*
+// @match        *://hhkan4.com/*
 // @run-at       document-start
 // @grant        none
 // @icon         https://github.com/MissChina/anti-disable-devtool/raw/main/icon.png
